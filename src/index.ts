@@ -24,9 +24,9 @@ import { Hono } from 'hono';
 import { getSandbox, Sandbox, type SandboxOptions } from '@cloudflare/sandbox';
 
 import type { AppEnv, ClawdbotEnv } from './types';
-import { CLAWDBOT_PORT, R2_MOUNT_PATH } from './config';
+import { CLAWDBOT_PORT } from './config';
 import { createAccessMiddleware } from './auth';
-import { ensureClawdbotGateway, mountR2Storage } from './gateway';
+import { ensureClawdbotGateway, syncToR2 } from './gateway';
 import { api, admin, debug } from './routes';
 
 export { Sandbox };
@@ -138,54 +138,16 @@ async function scheduled(
   env: ClawdbotEnv,
   _ctx: ExecutionContext
 ): Promise<void> {
-  // Skip if R2 is not configured
-  if (!env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY || !env.CF_ACCOUNT_ID) {
-    console.log('[cron] R2 not configured, skipping backup');
-    return;
-  }
-
   const options = buildSandboxOptions(env);
   const sandbox = getSandbox(env.Sandbox, 'clawdbot', options);
 
-  // Ensure R2 is mounted
-  const mounted = await mountR2Storage(sandbox, env);
-  if (!mounted) {
-    console.log('[cron] Failed to mount R2, skipping backup');
-    return;
-  }
-
-  // Run rsync to backup config to R2
-  // Exclude lock files, logs, and temp files
-  // Write timestamp to .last-sync for tracking
-  // Note: Use --no-times because s3fs doesn't support setting timestamps
-  const syncCmd = `rsync -r --no-times --delete --exclude='*.lock' --exclude='*.log' --exclude='*.tmp' /root/.clawdbot/ ${R2_MOUNT_PATH}/ && date -Iseconds > ${R2_MOUNT_PATH}/.last-sync`;
+  console.log('[cron] Starting backup sync to R2...');
+  const result = await syncToR2(sandbox, env);
   
-  try {
-    console.log('[cron] Starting backup sync to R2...');
-    const proc = await sandbox.startProcess(syncCmd);
-    
-    // Wait for sync to complete (max 30 seconds)
-    let attempts = 0;
-    while (proc.status === 'running' && attempts < 60) {
-      await new Promise(r => setTimeout(r, 500));
-      attempts++;
-    }
-    
-    // Check for success by reading the timestamp file
-    // (process status may not update reliably)
-    const checkProc = await sandbox.startProcess(`cat ${R2_MOUNT_PATH}/.last-sync`);
-    await new Promise(r => setTimeout(r, 1000));
-    const checkLogs = await checkProc.getLogs();
-    const timestamp = checkLogs.stdout?.trim();
-    
-    if (timestamp && timestamp.match(/^\d{4}-\d{2}-\d{2}/)) {
-      console.log('[cron] Backup sync completed successfully at', timestamp);
-    } else {
-      const logs = await proc.getLogs();
-      console.error('[cron] Backup sync failed:', logs.stderr || logs.stdout);
-    }
-  } catch (error) {
-    console.error('[cron] Error during backup sync:', error);
+  if (result.success) {
+    console.log('[cron] Backup sync completed successfully at', result.lastSync);
+  } else {
+    console.error('[cron] Backup sync failed:', result.error, result.details || '');
   }
 }
 

@@ -24,7 +24,8 @@ src/
 ├── gateway/          # Clawdbot gateway management
 │   ├── process.ts    # Process lifecycle (find, start)
 │   ├── env.ts        # Environment variable building
-│   └── r2.ts         # R2 bucket mounting
+│   ├── r2.ts         # R2 bucket mounting
+│   └── sync.ts       # R2 backup sync logic
 ├── routes/           # API route handlers
 │   ├── api.ts        # /api/* endpoints (devices, gateway)
 │   ├── admin.ts      # /_admin/* static file serving

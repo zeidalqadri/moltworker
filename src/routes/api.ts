@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import type { Process } from '@cloudflare/sandbox';
 import { createAccessMiddleware } from '../auth';
-import { ensureClawdbotGateway, findExistingClawdbotProcess, mountR2Storage } from '../gateway';
+import { ensureClawdbotGateway, findExistingClawdbotProcess, mountR2Storage, syncToR2 } from '../gateway';
 import { R2_MOUNT_PATH } from '../config';
 
 // CLI commands can take 10-15 seconds to complete due to WebSocket connection overhead
@@ -260,52 +260,21 @@ admin.get('/storage', async (c) => {
 admin.post('/storage/sync', async (c) => {
   const sandbox = c.get('sandbox');
   
-  // Check if R2 is configured
-  if (!c.env.R2_ACCESS_KEY_ID || !c.env.R2_SECRET_ACCESS_KEY || !c.env.CF_ACCOUNT_ID) {
-    return c.json({ error: 'R2 storage is not configured' }, 400);
-  }
-
-  try {
-    // Mount R2 if not already mounted
-    const mounted = await mountR2Storage(sandbox, c.env);
-    if (!mounted) {
-      return c.json({ error: 'Failed to mount R2 storage' }, 500);
-    }
-
-    // Run rsync to backup config to R2
-    // Note: Use --no-times because s3fs doesn't support setting timestamps
-    const syncCmd = `rsync -r --no-times --delete --exclude='*.lock' --exclude='*.log' --exclude='*.tmp' /root/.clawdbot/ ${R2_MOUNT_PATH}/ && date -Iseconds > ${R2_MOUNT_PATH}/.last-sync`;
-    
-    const proc = await sandbox.startProcess(syncCmd);
-    await waitForProcess(proc, 30000); // 30 second timeout for sync
-
-    // The sync command writes a timestamp file on success.
-    // Check for that file to verify success, since process status
-    // may not update immediately in the sandbox API.
-    const timestampProc = await sandbox.startProcess(`cat ${R2_MOUNT_PATH}/.last-sync`);
-    await waitForProcess(timestampProc, 5000);
-    const timestampLogs = await timestampProc.getLogs();
-    const lastSync = timestampLogs.stdout?.trim();
-    
-    // If we got a timestamp, the sync succeeded
-    if (lastSync && lastSync.match(/^\d{4}-\d{2}-\d{2}/)) {
-      return c.json({
-        success: true,
-        message: 'Sync completed successfully',
-        lastSync,
-      });
-    } else {
-      // No timestamp means the sync failed
-      const logs = await proc.getLogs();
-      return c.json({
-        success: false,
-        error: 'Sync failed',
-        details: logs.stderr || logs.stdout || 'No timestamp file created',
-      }, 500);
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage }, 500);
+  const result = await syncToR2(sandbox, c.env);
+  
+  if (result.success) {
+    return c.json({
+      success: true,
+      message: 'Sync completed successfully',
+      lastSync: result.lastSync,
+    });
+  } else {
+    const status = result.error?.includes('not configured') ? 400 : 500;
+    return c.json({
+      success: false,
+      error: result.error,
+      details: result.details,
+    }, status);
   }
 });
 

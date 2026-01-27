@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { findExistingClawdbotProcess } from './process';
 import type { Sandbox, Process } from '@cloudflare/sandbox';
+import { createMockSandbox } from '../test-utils';
 
-// Helper to create a mock process
-function createMockProcess(overrides: Partial<Process> = {}): Process {
+// Helper to create a full mock process (with methods needed for process tests)
+function createFullMockProcess(overrides: Partial<Process> = {}): Process {
   return {
     id: 'test-id',
     command: 'clawdbot gateway',
@@ -18,58 +19,50 @@ function createMockProcess(overrides: Partial<Process> = {}): Process {
   } as Process;
 }
 
-// Helper to create a mock sandbox
-function createMockSandbox(processes: Process[] = []): Sandbox {
-  return {
-    listProcesses: vi.fn().mockResolvedValue(processes),
-    startProcess: vi.fn(),
-    containerFetch: vi.fn(),
-    wsConnect: vi.fn(),
-    mountBucket: vi.fn(),
-  } as unknown as Sandbox;
-}
-
 describe('findExistingClawdbotProcess', () => {
   it('returns null when no processes exist', async () => {
-    const sandbox = createMockSandbox([]);
+    const { sandbox } = createMockSandbox({ processes: [] });
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result).toBeNull();
   });
 
   it('returns null when only CLI commands are running', async () => {
     const processes = [
-      createMockProcess({ command: 'clawdbot devices list --json', status: 'running' }),
-      createMockProcess({ command: 'clawdbot --version', status: 'completed' }),
+      createFullMockProcess({ command: 'clawdbot devices list --json', status: 'running' }),
+      createFullMockProcess({ command: 'clawdbot --version', status: 'completed' }),
     ];
-    const sandbox = createMockSandbox(processes);
+    const { sandbox, listProcessesMock } = createMockSandbox();
+    listProcessesMock.mockResolvedValue(processes);
     
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result).toBeNull();
   });
 
   it('returns gateway process when running', async () => {
-    const gatewayProcess = createMockProcess({ 
+    const gatewayProcess = createFullMockProcess({ 
       id: 'gateway-1',
       command: 'clawdbot gateway --port 18789', 
       status: 'running' 
     });
     const processes = [
-      createMockProcess({ command: 'clawdbot devices list', status: 'completed' }),
+      createFullMockProcess({ command: 'clawdbot devices list', status: 'completed' }),
       gatewayProcess,
     ];
-    const sandbox = createMockSandbox(processes);
+    const { sandbox, listProcessesMock } = createMockSandbox();
+    listProcessesMock.mockResolvedValue(processes);
     
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result).toBe(gatewayProcess);
   });
 
   it('returns gateway process when starting', async () => {
-    const gatewayProcess = createMockProcess({ 
+    const gatewayProcess = createFullMockProcess({ 
       id: 'gateway-1',
       command: '/usr/local/bin/start-clawdbot.sh', 
       status: 'starting' 
     });
-    const sandbox = createMockSandbox([gatewayProcess]);
+    const { sandbox, listProcessesMock } = createMockSandbox();
+    listProcessesMock.mockResolvedValue([gatewayProcess]);
     
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result).toBe(gatewayProcess);
@@ -77,10 +70,11 @@ describe('findExistingClawdbotProcess', () => {
 
   it('ignores completed gateway processes', async () => {
     const processes = [
-      createMockProcess({ command: 'clawdbot gateway', status: 'completed' }),
-      createMockProcess({ command: 'start-clawdbot.sh', status: 'failed' }),
+      createFullMockProcess({ command: 'clawdbot gateway', status: 'completed' }),
+      createFullMockProcess({ command: 'start-clawdbot.sh', status: 'failed' }),
     ];
-    const sandbox = createMockSandbox(processes);
+    const { sandbox, listProcessesMock } = createMockSandbox();
+    listProcessesMock.mockResolvedValue(processes);
     
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result).toBeNull();
@@ -96,29 +90,31 @@ describe('findExistingClawdbotProcess', () => {
   });
 
   it('matches start-clawdbot.sh command', async () => {
-    const gatewayProcess = createMockProcess({ 
+    const gatewayProcess = createFullMockProcess({ 
       id: 'gateway-1',
       command: '/usr/local/bin/start-clawdbot.sh', 
       status: 'running' 
     });
-    const sandbox = createMockSandbox([gatewayProcess]);
+    const { sandbox, listProcessesMock } = createMockSandbox();
+    listProcessesMock.mockResolvedValue([gatewayProcess]);
     
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result).toBe(gatewayProcess);
   });
 
   it('returns first matching gateway process', async () => {
-    const firstGateway = createMockProcess({ 
+    const firstGateway = createFullMockProcess({ 
       id: 'gateway-1',
       command: 'clawdbot gateway', 
       status: 'running' 
     });
-    const secondGateway = createMockProcess({ 
+    const secondGateway = createFullMockProcess({ 
       id: 'gateway-2',
       command: 'start-clawdbot.sh', 
       status: 'starting' 
     });
-    const sandbox = createMockSandbox([firstGateway, secondGateway]);
+    const { sandbox, listProcessesMock } = createMockSandbox();
+    listProcessesMock.mockResolvedValue([firstGateway, secondGateway]);
     
     const result = await findExistingClawdbotProcess(sandbox);
     expect(result?.id).toBe('gateway-1');
