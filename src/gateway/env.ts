@@ -9,8 +9,20 @@ import type { MoltbotEnv } from '../types';
 export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   const envVars: Record<string, string> = {};
 
-  if (env.ANTHROPIC_API_KEY) envVars.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
-  if (env.ANTHROPIC_BASE_URL) envVars.ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL;
+  // AI Gateway vars take precedence, mapped to ANTHROPIC_* for the container
+  // This allows users to configure any provider in AI Gateway
+  if (env.AI_GATEWAY_API_KEY) {
+    envVars.ANTHROPIC_API_KEY = env.AI_GATEWAY_API_KEY;
+  } else if (env.ANTHROPIC_API_KEY) {
+    envVars.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
+  }
+
+  if (env.AI_GATEWAY_BASE_URL) {
+    envVars.ANTHROPIC_BASE_URL = env.AI_GATEWAY_BASE_URL;
+  } else if (env.ANTHROPIC_BASE_URL) {
+    envVars.ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL;
+  }
+
   if (env.OPENAI_API_KEY) envVars.OPENAI_API_KEY = env.OPENAI_API_KEY;
   // Map MOLTBOT_GATEWAY_TOKEN to CLAWDBOT_GATEWAY_TOKEN (container expects this name)
   if (env.MOLTBOT_GATEWAY_TOKEN) envVars.CLAWDBOT_GATEWAY_TOKEN = env.MOLTBOT_GATEWAY_TOKEN;

@@ -9,10 +9,44 @@ describe('buildEnvVars', () => {
     expect(result).toEqual({});
   });
 
-  it('includes ANTHROPIC_API_KEY when set', () => {
+  it('includes ANTHROPIC_API_KEY when set directly', () => {
     const env = createMockEnv({ ANTHROPIC_API_KEY: 'sk-test-key' });
     const result = buildEnvVars(env);
     expect(result.ANTHROPIC_API_KEY).toBe('sk-test-key');
+  });
+
+  it('maps AI_GATEWAY_API_KEY to ANTHROPIC_API_KEY', () => {
+    const env = createMockEnv({ AI_GATEWAY_API_KEY: 'sk-gateway-key' });
+    const result = buildEnvVars(env);
+    expect(result.ANTHROPIC_API_KEY).toBe('sk-gateway-key');
+  });
+
+  it('maps AI_GATEWAY_BASE_URL to ANTHROPIC_BASE_URL', () => {
+    const env = createMockEnv({ AI_GATEWAY_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic' });
+    const result = buildEnvVars(env);
+    expect(result.ANTHROPIC_BASE_URL).toBe('https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic');
+  });
+
+  it('AI_GATEWAY_* takes precedence over ANTHROPIC_*', () => {
+    const env = createMockEnv({
+      AI_GATEWAY_API_KEY: 'gateway-key',
+      AI_GATEWAY_BASE_URL: 'https://gateway.example.com',
+      ANTHROPIC_API_KEY: 'direct-key',
+      ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+    });
+    const result = buildEnvVars(env);
+    expect(result.ANTHROPIC_API_KEY).toBe('gateway-key');
+    expect(result.ANTHROPIC_BASE_URL).toBe('https://gateway.example.com');
+  });
+
+  it('falls back to ANTHROPIC_* when AI_GATEWAY_* not set', () => {
+    const env = createMockEnv({
+      ANTHROPIC_API_KEY: 'direct-key',
+      ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+    });
+    const result = buildEnvVars(env);
+    expect(result.ANTHROPIC_API_KEY).toBe('direct-key');
+    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.anthropic.com');
   });
 
   it('includes OPENAI_API_KEY when set', () => {

@@ -67,8 +67,11 @@ function validateRequiredEnv(env: MoltbotEnv): string[] {
     missing.push('CF_ACCESS_AUD');
   }
 
-  if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_BASE_URL) {
-    missing.push('ANTHROPIC_API_KEY or ANTHROPIC_BASE_URL');
+  // Check for AI Gateway or direct Anthropic configuration
+  const hasApiKey = env.AI_GATEWAY_API_KEY || env.ANTHROPIC_API_KEY;
+  const hasBaseUrl = env.AI_GATEWAY_BASE_URL || env.ANTHROPIC_BASE_URL;
+  if (!hasApiKey && !hasBaseUrl) {
+    missing.push('AI_GATEWAY_API_KEY or ANTHROPIC_API_KEY');
   }
 
   return missing;

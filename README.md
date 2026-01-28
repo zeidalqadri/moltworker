@@ -68,8 +68,12 @@ _Cloudflare Sandboxes are available on the [Workers Paid plan](https://dash.clou
 # Install dependencies
 npm install
 
-# Set your Anthropic API key
+# Set your API key (direct Anthropic access)
 npx wrangler secret put ANTHROPIC_API_KEY
+
+# Or use AI Gateway instead (see "Optional: Cloudflare AI Gateway" below)
+# npx wrangler secret put AI_GATEWAY_API_KEY
+# npx wrangler secret put AI_GATEWAY_BASE_URL
 
 # Generate and set a gateway token (required for remote access)
 # Save this token - you'll need it to access the Control UI
@@ -323,26 +327,23 @@ All endpoints require the `CDP_SECRET` header for authentication.
 
 ## Optional: Cloudflare AI Gateway
 
-You can route Anthropic API requests through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) for unified billing, caching, rate limiting, analytics, and cost tracking.
+You can route API requests through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) for caching, rate limiting, analytics, and cost tracking. AI Gateway supports multiple providers — configure your preferred provider in the gateway and use these env vars:
 
 ### Setup
 
 1. Create an AI Gateway in the [AI Gateway section](https://dash.cloudflare.com/?to=/:account/ai/ai-gateway/create-gateway) of the Cloudflare Dashboard.
-2. Set the `ANTHROPIC_BASE_URL` secret to your gateway's Anthropic endpoint:
+2. Add a provider (e.g., Anthropic) to your gateway
+3. Set the gateway secrets:
 
 You'll find the base URL on the Overview tab of your newly created gateway. At the bottom of the page, expand the **Native API/SDK Examples** section and select "Anthropic".
 
 ```bash
-npx wrangler secret put ANTHROPIC_BASE_URL
+# Your provider's API key (e.g., Anthropic API key)
+npx wrangler secret put AI_GATEWAY_API_KEY
+
+# Your AI Gateway endpoint URL
+npx wrangler secret put AI_GATEWAY_BASE_URL
 # Enter: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic
-```
-
-3. Set the `ANTHROPIC_API_KEY` secret to an AI Gateway authentication token.
-
-On the Overview tab of your gateway, click **Create a token**, give it a Token name and leave Permissions and Account Resources as their defaults. Click "Create API Token" and copy the token. Then run:
-
-```bash
-npx wrangler secret put ANTHROPIC_API_KEY
 ```
 
 4. Redeploy:
@@ -351,13 +352,17 @@ npx wrangler secret put ANTHROPIC_API_KEY
 npm run deploy
 ```
 
+The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
+
 ## All Secrets Reference
 
 | Secret | Required | Description |
 |--------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key |
-| `ANTHROPIC_BASE_URL` | No | Custom Anthropic API base URL (e.g., for [Cloudflare AI Gateway](#optional-cloudflare-ai-gateway)) |
-| `OPENAI_API_KEY` | No | OpenAI API key (alternative to Anthropic) |
+| `AI_GATEWAY_API_KEY` | Yes* | API key for your AI Gateway provider (recommended) |
+| `AI_GATEWAY_BASE_URL` | Yes* | AI Gateway endpoint URL (see [AI Gateway setup](#optional-cloudflare-ai-gateway)) |
+| `ANTHROPIC_API_KEY` | Yes* | Direct Anthropic API key (fallback if AI Gateway not configured) |
+| `ANTHROPIC_BASE_URL` | No | Direct Anthropic API base URL (fallback) |
+| `OPENAI_API_KEY` | No | OpenAI API key (alternative provider) |
 | `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
 | `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
 | `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |
