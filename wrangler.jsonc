@@ -81,6 +81,7 @@
   // - SLACK_APP_TOKEN: (optional) Slack app token
   // - MOLTBOT_GATEWAY_TOKEN: (optional) Token to protect gateway access, if unset device pairing will be used
   // - CDP_SECRET: (optional) Shared secret for /cdp endpoint authentication
+  // - BRAVE_SEARCH_API_KEY: (optional) Brave Search API key for web search tool
   //
   // R2 persistent storage secrets (required for data persistence across sessions):
   // - R2_ACCESS_KEY_ID: R2 access key ID (from R2 API tokens)

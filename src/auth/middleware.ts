@@ -33,8 +33,24 @@ export function extractJWT(c: Context<AppEnv>): string | null {
 }
 
 /**
+ * Check if the request has a valid gateway token
+ */
+export function hasValidGatewayToken(c: Context<AppEnv>): boolean {
+  const expectedToken = c.env.MOLTBOT_GATEWAY_TOKEN;
+  if (!expectedToken) return false;
+
+  const url = new URL(c.req.url);
+  const queryToken = url.searchParams.get('token');
+  const headerToken = c.req.header('X-Gateway-Token') || c.req.header('Authorization')?.replace('Bearer ', '');
+
+  return queryToken === expectedToken || headerToken === expectedToken;
+}
+
+/**
  * Create a Cloudflare Access authentication middleware
- * 
+ *
+ * Also accepts gateway token as alternative authentication for CLI/API access.
+ *
  * @param options - Middleware options
  * @returns Hono middleware function
  */
@@ -45,6 +61,12 @@ export function createAccessMiddleware(options: AccessMiddlewareOptions) {
     // Skip auth in dev mode
     if (isDevMode(c.env)) {
       c.set('accessUser', { email: 'dev@localhost', name: 'Dev User' });
+      return next();
+    }
+
+    // Allow gateway token as alternative auth (for CLI access)
+    if (hasValidGatewayToken(c)) {
+      c.set('accessUser', { email: 'gateway-token@cli', name: 'CLI User' });
       return next();
     }
 

@@ -1,5 +1,6 @@
 #!/bin/bash
 # Startup script for Moltbot in Cloudflare Sandbox
+# Version: 2026-02-03-fix-telegram-dm-key
 # This script:
 # 1. Restores config from R2 backup if available
 # 2. Configures moltbot from environment variables
@@ -187,8 +188,18 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     config.channels.telegram = config.channels.telegram || {};
     config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
     config.channels.telegram.enabled = true;
-    config.channels.telegram.dm = config.channels.telegram.dm || {};
     config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+    // Explicitly allow the owner's Telegram user ID
+    const ownerTelegramId = process.env.TELEGRAM_OWNER_ID ? parseInt(process.env.TELEGRAM_OWNER_ID, 10) : null;
+    if (ownerTelegramId) {
+        config.channels.telegram.allowFrom = config.channels.telegram.allowFrom || [];
+        if (!config.channels.telegram.allowFrom.includes(ownerTelegramId)) {
+            config.channels.telegram.allowFrom.push(ownerTelegramId);
+        }
+        console.log('Telegram owner ID added to allowlist:', ownerTelegramId);
+    }
+    // Remove invalid 'dm' key if it exists from previous config
+    delete config.channels.telegram.dm;
 }
 
 // Discord configuration
@@ -206,6 +217,15 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
     config.channels.slack.botToken = process.env.SLACK_BOT_TOKEN;
     config.channels.slack.appToken = process.env.SLACK_APP_TOKEN;
     config.channels.slack.enabled = true;
+}
+
+// Web Search configuration (Brave Search API)
+if (process.env.BRAVE_SEARCH_API_KEY) {
+    config.tools = config.tools || {};
+    config.tools.webSearch = config.tools.webSearch || {};
+    config.tools.webSearch.provider = 'brave';
+    config.tools.webSearch.apiKey = process.env.BRAVE_SEARCH_API_KEY;
+    console.log('Brave Search API configured');
 }
 
 // Base URL override (e.g., for Cloudflare AI Gateway)
